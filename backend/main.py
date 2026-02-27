@@ -2,6 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
+import sys
+from pathlib import Path
+
+# Ensure `backend` directory is on sys.path so `utils` can be imported
+project_root = Path(__file__).resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 from utils.curb65 import calculate_curb65
 
 app = FastAPI()
@@ -15,8 +23,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-log_model = joblib.load("models/logistic_model.pkl")
-rf_model = joblib.load("models/rf_model.pkl")
+model_dir = Path(__file__).resolve().parent / "models"
+log_model_path = model_dir / "logistic_model.pkl"
+rf_model_path = model_dir / "rf_model.pkl"
+try:
+    log_model = joblib.load(str(log_model_path))
+    rf_model = joblib.load(str(rf_model_path))
+except Exception as e:
+    raise RuntimeError(f"Failed to load model files: {e}") from e
 
 @app.post("/predict")
 def predict(data: dict):
