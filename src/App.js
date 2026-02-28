@@ -11,6 +11,7 @@ function App() {
   const [audioResult, setAudioResult] = useState(null);
   const [symptomResult, setSymptomResult] = useState(null);
   const [view, setView] = useState("home"); // home | screen | dashboard
+  const formatConfidence = (value) => (typeof value === 'number' ? `${Math.round(value)}%` : value);
 
   return (
     <div className="app-container">
@@ -48,10 +49,33 @@ function App() {
             (() => {
               const audio = audioResult || {};
               const symptom = symptomResult || {};
+              const audioError = audio.error || (audio.status === "error" ? audio.detail : null);
+              const symptomError = symptom.error || (symptom.status === "error" ? symptom.detail : null);
+              const hasAudioRisk = typeof audio.risk_score === "number" || typeof audio.risk_level === "string";
+              const hasSymptomRisk = typeof symptom.risk_score === "number" || typeof symptom.risk_level === "string";
+              const hasAnyRisk = hasAudioRisk || hasSymptomRisk;
+              const warnings = [audio.warning, symptom.warning].filter(Boolean);
+              if (audioError) warnings.push(`Audio note: ${audioError}`);
+              if (symptomError) warnings.push(`Symptom note: ${symptomError}`);
+
+              if (!hasAnyRisk && (audioError || symptomError)) {
+                const message = symptomError || audioError || "Risk calculation failed.";
+                return (
+                  <div style={{ marginTop: 12 }}>
+                    <h4>Feedback</h4>
+                    <div className="muted">- {message}</div>
+                  </div>
+                );
+              }
+
               const feedback = generateFeedback(audio, symptom);
 
               const displayRisk = audio.risk_level || symptom.risk_level || feedback.audio.level || feedback.symptom.level || 'unknown';
-              const confidence = audio.risk_confidence || symptom.risk_confidence || `${feedback.audio.percent || 0}%`;
+              const confidence = formatConfidence(audio.risk_confidence) || formatConfidence(symptom.risk_confidence) || `${feedback.audio.percent || 0}%`;
+              const audioPattern = (typeof audio.analysis_label === 'string' && audio.analysis_label)
+                || (typeof audio.yamnet_top === 'string' && audio.yamnet_top)
+                || null;
+              const audioEngine = (typeof audio.analysis_engine === 'string' && audio.analysis_engine) ? audio.analysis_engine : null;
 
               return (
                 <div>
@@ -60,10 +84,19 @@ function App() {
                       <div className="muted">Risk Level</div>
                       <div className="percent">{displayRisk + (confidence ? ` (${confidence})` : '')}</div>
                     </div>
+                    {audioPattern && (
+                      <div className="result-item">
+                        <div className="muted">Audio Pattern</div>
+                        <div>{audioPattern}{audioEngine ? ` (${audioEngine})` : ''}</div>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 12 }}>
                     <h4>Feedback</h4>
+                    {warnings.map((w, i) => (
+                      <div key={`w-${i}`} className="muted">- {w}</div>
+                    ))}
                     {feedback.messages.map((m, i) => (
                       <div key={`m-${i}`} className="muted">- {m}</div>
                     ))}
